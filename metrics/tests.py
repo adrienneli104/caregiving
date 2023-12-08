@@ -4,6 +4,7 @@ from homes.factories import HomeFactory
 from residents.factories import ResidentFactory, ResidencyFactory
 from datetime import datetime
 from django.urls import reverse
+from activities.model import Activity
 
 
 class ResidentActivityTestCase(TestCase):
@@ -44,4 +45,47 @@ class ResidentActivityTestCase(TestCase):
             self.data,
             content_type="application/x-www-form-urlencoded",
         )
-        print(response)
+        self.assertEqual(response.code, 200)
+        self.assertEqual(Activity.objects.all.count(), 1)
+        self.assertEqual(ResidentActivity.objects.all.count(), 1)
+
+    def test_add_invalid_activity_rollback(self):
+        """When invalid activity is added, rollback entire transaction."""
+        # Resident0 does not exist
+        self.data = {
+            "residents": self.resident0,
+            "activity_type": "outdoor",
+            "date": datetime.now(),
+            "duration_minutes": 30,
+            "caregiver_role": "staff",
+        }
+        response = self.client.post(
+            reverse("activity-form-view"),
+            self.data,
+            content_type="application/x-www-form-urlencoded",
+        )
+        self.assertEqual(response.code, 400)
+        self.assertEqual(Activity.objects.all.count(), 0)
+        self.assertEqual(ResidentActivity.objects.all.count(), 0)
+
+    def test_add_invalid_resident_activity_rollback(self):
+        """When invalid resident_activity is added, rollback entire
+        transaction."""
+        # Resident3 does not have residency so can't be added to resident_activity
+        # table and activity insertion should be rolled back
+        self.resident3 = ResidentFactory(first_name="Henry")
+        self.data = {
+            "residents": self.resident3,
+            "activity_type": "outdoor",
+            "date": datetime.now(),
+            "duration_minutes": 30,
+            "caregiver_role": "staff",
+        }
+        response = self.client.post(
+            reverse("activity-form-view"),
+            self.data,
+            content_type="application/x-www-form-urlencoded",
+        )
+        self.assertEqual(response.code, 400)
+        self.assertEqual(Activity.objects.all.count(), 0)
+        self.assertEqual(ResidentActivity.objects.all.count(), 0)
